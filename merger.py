@@ -32,7 +32,8 @@ def folder_info():
     working_dir = pathlib.Path(__file__).parent.absolute()
     print(f'\nYou are here: {working_dir}')
     # file_list = sorted(working_dir.iterdir(), key=os.path.getmtime)
-    file_list = glob.glob('*.xlsx')
+    file_list = [name for name in os.listdir(".") if name.endswith(".xlsx")]
+
     print('\nFiles from folder:')
     for i, file_ in enumerate(file_list):
         print(f'{i+1}: {file_}')
