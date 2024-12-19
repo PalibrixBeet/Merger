@@ -8,10 +8,13 @@ IMPORTANT !!!
 import glob
 import pathlib
 import os
+import sys
 import warnings
 from datetime import datetime, time
+from io import TextIOWrapper
 
 import numpy as np
+import progressbar
 import regex as re
 import pandas as pd
 # import numpy as np
@@ -20,15 +23,18 @@ import pandas as pd
 from fuzzywuzzy import process, fuzz
 from pandas import Timestamp
 from text_unidecode import unidecode
+from alive_progress import alive_bar
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning,)
+DEBUG = 0
 
 def main():
     # TODO uncomment necessary rows!!
     working_path, files = folder_info()
-    inputted_data = define_files(working_path, files)
+    inputted_data, similarity_score = define_files(working_path, files)
     # inputted_data = [working_path + f_name for f_name in ['4635.xlsx', '4635_P.xlsx']]
-    frame_with_result = process_files(inputted_data)
+    frame_with_result = process_files(inputted_data, similarity_score)
     write_result(frame_with_result, inputted_data)
 
 
@@ -74,9 +80,12 @@ def define_files(path, files):
                 print(f'Invalid path: {file_path}! Please, try again')
 
         if path_is_correct:
+            similarity_score = int(input(
+                'Type similarity score between names in files (skip to set 90 as a default): '
+            ) or 90)
             break
 
-    return two_files
+    return two_files, similarity_score
 
 
 def compare_headers(column_1_names, column_2_names) -> Exception or None:
@@ -90,7 +99,11 @@ def compare_headers(column_1_names, column_2_names) -> Exception or None:
     return None
 
 
-def process_files(filenames):
+def process_files(filenames, similarity_score):
+    matched_rows_count = 0
+    new_rows_count = 0
+    unmatched_titles_count = 0
+
     first_df = pd.read_excel(filenames[0])
     second_df = pd.read_excel(filenames[1])
     compare_headers(first_df.columns, second_df.columns)
@@ -108,7 +121,15 @@ def process_files(filenames):
         for name in first_df_grouped_to_list
     ]
 
-    for from_second_df_frame in grouped_second_df:
+    print('\n\n')
+    widgets = [
+        ' [', progressbar.Timer(), '] ',
+        progressbar.Bar(),
+        progressbar.Percentage(),
+        ' (', progressbar.ETA(), ') ',
+    ]
+    bar = progressbar.ProgressBar(maxval=len(grouped_second_df), widgets=widgets).start()
+    for i, from_second_df_frame in enumerate(grouped_second_df):
         data_from_second_df_frame = from_second_df_frame[1]
 
         # for debugging purposes
@@ -135,12 +156,14 @@ def process_files(filenames):
                     frame_name_from_secondary_frame, frame_names_from_main_df, scorer=fuzz.token_set_ratio)
                 value_to_append = pd.Series(small_secondary_frame, index=first_df.columns)
                 # if secondary_frame_in_main_df['similarity'] >= similarity_index:
-                if best_match[1] > 90:
+                if best_match[1] > similarity_score:
+                    matched_rows_count += 1
                     # do something if items are similar
                     # print(f"similarity: {secondary_frame_in_main_df}")
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    print(f'>This title matched\n'
-                          f'\t{from_second_df_frame[0]}')
+                    # os.system('cls' if os.name == 'nt' else 'clear')
+                    if DEBUG or not permission_for_rewriting:
+                        print(f'>This title matched\n'
+                              f'\t{from_second_df_frame[0]}')
                     index_of_el_in_main_df = frame_names_from_main_df.index(best_match[0])
                     small_main_frame = first_df_grouped_to_list[main_frame_index][1].values[index_of_el_in_main_df]
                     rewritten_data = rewrite_data_in_small_main_fr( list(first_df.columns),
@@ -152,10 +175,13 @@ def process_files(filenames):
                     #  save rewritten frame
                     first_df_grouped_to_list[main_frame_index][1] = pd.DataFrame(
                         np_array_from_df, columns=first_df.columns)
-                elif best_match[1] <= 90:
+                elif best_match[1] <= similarity_score:
+                    new_rows_count += 1
                     # add row to matched frame
-                    print(f'>Added new row to the file\n'
-                          f'\t{from_second_df_frame[0]}')
+                    # print(frame_name_from_secondary_frame, best_match)
+                    if DEBUG or not permission_for_rewriting:
+                        print(f'>Added new row to the file\n'
+                              f'\t{from_second_df_frame[0]}')
                     a = ''
                     first_df_grouped_to_list[main_frame_index][1] = first_df_grouped_to_list[main_frame_index][1]._append(value_to_append, ignore_index=True)
                 else:
@@ -164,7 +190,9 @@ def process_files(filenames):
                     a = ''
                 a = ''
         elif not match_frame_name and frame_name:
-            print(f'>This title haven`t matched\n{from_second_df_frame[0]}')
+            unmatched_titles_count += 1
+            if DEBUG or not permission_for_rewriting:
+                print(f'>This title haven`t matched\n{from_second_df_frame[0]}')
             first_df_grouped_to_list.append(from_second_df_frame)
         elif match_frame_name and frame_name == 'No_name':  # for moderators without 'Presentation Titles'
             a = ''
@@ -190,11 +218,18 @@ def process_files(filenames):
             # !!! for exceptions
             print('Something went wrong in matching titles!')
             a = ''
+        bar.update(i)
+    bar.finish()
     main_df = pd.concat(
         [frame_in_list[1] for frame_in_list in first_df_grouped_to_list],
         ignore_index=True,
         join='inner'
     )
+
+    print('Number of matched rows:', matched_rows_count)
+    print('Number of new rows added:', new_rows_count)
+    print('Number of unmatched titles:', unmatched_titles_count)
+
     return main_df
 
 
@@ -214,7 +249,7 @@ def rewrite_data_in_small_main_fr(columns, from_first_fr, from_second_fr, rewrit
                 row.append("")
         input_string += "    ".join(row) + "\n"
     input_string += "\n0 - Don't overwrite any column\n"
-    input_string += "If you want to rewrite more than one, use a comma for separating column numbers"
+    input_string += "If you want to rewrite more than one, use a comma for separating column numbers\n"
 
 
     while not rewrite_all:
@@ -224,10 +259,6 @@ def rewrite_data_in_small_main_fr(columns, from_first_fr, from_second_fr, rewrit
     Make changes for all cases, press - 'A'
         : """)
 
-        # columns_to_rewrite = '1,3,10'.split(',')
-        # rewrite = 'A'
-        # if columns_to_rewrite[0] == 0:
-        #     continue
         from_first_fr, rewrite, columns_to_rewrite = rewrite_rows(columns_to_rewrite, rewrite, from_first_fr, from_second_fr)
         return from_first_fr, rewrite, columns_to_rewrite
     else:
