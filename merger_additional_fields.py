@@ -5,26 +5,19 @@ IMPORTANT !!!
 -------------
     - Variable "a" is used for debugging purposes
 """
-import glob
-import pathlib
 import os
-import sys
+import pathlib
 import warnings
-from datetime import datetime, time
-from io import TextIOWrapper
+from datetime import time
 
 import numpy as np
+import pandas as pd
 import progressbar
 import regex as re
-import pandas as pd
-# import numpy as np
-# from tqdm import tqdm
-# from string import punctuation
+
 from fuzzywuzzy import process, fuzz
 from pandas import Timestamp
 from text_unidecode import unidecode
-from alive_progress import alive_bar
-from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=FutureWarning,)
 DEBUG = 0
@@ -33,18 +26,16 @@ def main():
     # TODO uncomment necessary rows!!
     working_path, files = folder_info()
     inputted_data, similarity_score = define_files(working_path, files)
-    # inputted_data = [working_path + f_name for f_name in ['4635.xlsx', '4635_P.xlsx']]
     frame_with_result = process_files(inputted_data, similarity_score)
     write_result(frame_with_result, inputted_data)
 
 
 def folder_info():
     os.system('cls' if os.name == 'nt' else 'clear')
-    # print(f'\nYou are here: {os.getcwd()}')
+    if DEBUG:
+        print('DEBUG MODE')
     working_dir = pathlib.Path(__file__).parent.absolute()
     print(f'\nYou are here: {working_dir}')
-    # file_list = sorted(working_dir.iterdir(), key=os.path.getmtime)
-    # file_list = [name for name in os.listdir(".") if name.endswith(".xlsx")]
     file_list = [path.name for path in working_dir.glob('*') if path.is_file() and path.name.endswith(".xlsx")]
 
     print('\nFiles from folder:')
@@ -178,10 +169,14 @@ def process_files(filenames, similarity_score):
                 elif best_match[1] <= similarity_score:
                     new_rows_count += 1
                     # add row to matched frame
-                    # print(frame_name_from_secondary_frame, best_match)
                     if DEBUG or not permission_for_rewriting:
                         print(f'>Added new row to the file\n'
                               f'\t{from_second_df_frame[0]}')
+                        print(f"{'>>> Max. found similarity:':<30} {best_match[1]:<2}%\n"
+                              f"{'>>> From first file:':<30} {frame_name_from_secondary_frame:<15}\n"
+                              f"{'>>> From second file:':<30} {best_match[0]:<15}")
+
+                        print('- '*30)
                     a = ''
                     first_df_grouped_to_list[main_frame_index][1] = first_df_grouped_to_list[main_frame_index][1]._append(value_to_append, ignore_index=True)
                 else:
