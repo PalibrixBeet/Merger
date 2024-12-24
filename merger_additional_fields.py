@@ -221,6 +221,7 @@ def process_files(filenames, similarity_score):
         join='inner'
     )
 
+    print()
     print('Number of matched rows:', matched_rows_count)
     print('Number of new rows added:', new_rows_count)
     print('Number of unmatched titles:', unmatched_titles_count)
