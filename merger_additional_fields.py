@@ -119,7 +119,7 @@ def process_files(filenames, similarity_score):
         progressbar.Percentage(),
         ' (', progressbar.ETA(), ') ',
     ]
-    bar = progressbar.ProgressBar(maxval=len(grouped_second_df), widgets=widgets).start()
+    bar = progressbar.ProgressBar(maxval=grouped_second_df.ngroups, widgets=widgets).start()
     for i, from_second_df_frame in enumerate(grouped_second_df):
         data_from_second_df_frame = from_second_df_frame[1]
 
