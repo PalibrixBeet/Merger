@@ -266,8 +266,8 @@ def rewrite_data_in_small_main_fr(columns, from_first_fr, from_second_fr, rewrit
         return from_first_fr, rewrite, columns_to_rewrite
 
 def rewrite_rows(columns_to_rewrite, rewrite, from_first_fr, from_second_fr):
-    from_first_fr = np.vectorize(process_time)(from_first_fr)
-    from_second_fr = np.vectorize(process_time)(from_second_fr)
+    from_first_fr = np.vectorize(process_time, otypes=[object])(from_first_fr)
+    from_second_fr = np.vectorize(process_time, otypes=[object])(from_second_fr)
     if not '0' in columns_to_rewrite:
         for c_index in columns_to_rewrite:
             data_from_second_fr = from_second_fr[int(c_index.strip()) - 1]
