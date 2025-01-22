@@ -129,7 +129,7 @@ def process_files(filenames, similarity_score):
 
         frame_name = re.sub(r'[^\p{L}\p{N}]+', '', unidecode(from_second_df_frame[0]).lower()).replace(' ', '') \
             if isinstance(from_second_df_frame[0], str) else 'No_name'  # only letters from name
-        match_frame_name = [f_name for f_name in presentations_names_list_firs_df if f_name == frame_name]
+        match_frame_name = [f_name for f_name in presentations_names_list_firs_df if fuzz.ratio(f_name, frame_name) > 95 ]
         main_frame_index = presentations_names_list_firs_df.index(match_frame_name[0]) if match_frame_name else int()
 
         if match_frame_name and frame_name != 'No_name':
