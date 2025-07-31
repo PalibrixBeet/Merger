@@ -8,7 +8,7 @@ IMPORTANT !!!
 import os
 import pathlib
 import warnings
-from datetime import time
+from datetime import time, date, datetime
 
 # import Levenshtein
 from Levenshtein import distance
@@ -18,7 +18,7 @@ import progressbar
 import regex as re
 
 from fuzzywuzzy import process, fuzz
-from pandas import Timestamp
+from pandas import Timestamp, DataFrame
 from text_unidecode import unidecode
 
 warnings.filterwarnings("ignore", category=FutureWarning,)
@@ -99,6 +99,10 @@ def process_files(filenames, similarity_score):
 
     first_df = pd.read_excel(filenames[0])
     second_df = pd.read_excel(filenames[1])
+
+    # first_df.fillna('', inplace=True)
+    # second_df.fillna('', inplace=True)
+
     compare_headers(first_df.columns, second_df.columns)
 
     # group frames by title
@@ -266,14 +270,15 @@ def rewrite_data_in_small_main_fr(columns, from_first_fr, from_second_fr, rewrit
         return from_first_fr, rewrite, columns_to_rewrite
 
 def rewrite_rows(columns_to_rewrite, rewrite, from_first_fr, from_second_fr):
-    from_first_fr = np.vectorize(process_time, otypes=[object])(from_first_fr)
-    from_second_fr = np.vectorize(process_time, otypes=[object])(from_second_fr)
+    # from_first_fr = np.vectorize(process_time, otypes=[object])(from_first_fr)
+    # from_second_fr = np.vectorize(process_time, otypes=[object])(from_second_fr)
     if not '0' in columns_to_rewrite:
         for c_index in columns_to_rewrite:
             data_from_second_fr = from_second_fr[int(c_index.strip()) - 1]
             if data_from_second_fr and not pd.isnull(data_from_second_fr):
                 if isinstance(data_from_second_fr, str):
-                    from_first_fr[int(c_index.strip()) - 1] = data_from_second_fr.strip()
+                    data_from_second_fr = data_from_second_fr.strip()
+                from_first_fr[int(c_index.strip()) - 1] = data_from_second_fr
                 # elif isinstance(data_from_second_fr, time):
                 #     from_first_fr[int(c_index.strip()) - 1] = data_from_second_fr.strftime("%H:%M")
                 # elif isinstance(data_from_second_fr, Timestamp):
@@ -281,19 +286,56 @@ def rewrite_rows(columns_to_rewrite, rewrite, from_first_fr, from_second_fr):
 
     return from_first_fr, rewrite, columns_to_rewrite
 
-def process_time(value:str):
-    if pd.isnull(value):
-        value = ''
-    elif isinstance(value, time):
-        value = value.strftime("%H:%M")
-    elif isinstance(value, Timestamp):
-        value = value.strftime("%Y-%m-%d")
-    return value
-
-def write_result(result, input_file_names):
+def write_result(result: DataFrame, input_file_names):
     output_file_name = f'{"_&_".join([f.rsplit("/")[-1].rsplit(".", 1)[0] for f in input_file_names])}.xlsx'
-    # write result to file
-    result.to_excel(output_file_name, index=False)
+    # Converting to objects, so I can drop Nat, None, NaN values
+    result = result.astype(object).fillna('')
+    result['Date'] = pd.to_datetime(result['Date'], errors='coerce')
+    result['Start Time'] = result['Start Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+    result['End Time'] = result['End Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+
+    with pd.ExcelWriter(output_file_name,
+                        engine='xlsxwriter',
+                        engine_kwargs={'options': {'strings_to_urls': False}},
+                        date_format="YYYY-MM-DD",
+                        datetime_format="YYYY-MM-DD") as writer:
+        # Write the DataFrame to excel, starting from the second row and without the default header
+        result.to_excel(writer, sheet_name='Sheet1', startrow=1, header=False, index=False)
+
+        # Get the xlsxwriter workbook and worksheet objects
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'fg_color': '#9fc5e8',
+            'border': 1,
+            'text_wrap': True,
+            'font_size': 10
+        })
+
+        # Write the column headers
+        for col_num, value in enumerate(result.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+
+        # Adjusting column width for better readability
+        worksheet.set_column(0, 0, 25)  # Name
+        worksheet.set_column(1, 1, 35)  # Affiliation
+        worksheet.set_column(2, 2, 15)  # Role
+        worksheet.set_column(3, 3, 10)  # Email
+        worksheet.set_column(4, 4, 40)  # Session name
+        worksheet.set_column(5, 5, 10)  # Description
+        worksheet.set_column(6, 6, 40)  # Title
+        worksheet.set_column(7, 7, 10)  # Abstract
+        worksheet.set_column(8, 8, 10)  # Abstract URL
+        worksheet.set_column(9, 9, 5)  # Video URL
+        worksheet.set_column(10, 10, 12)  # Room
+        worksheet.set_column(11, 11, 12)  # Date
+        worksheet.set_column(12, 12, 7)  # Start Time
+        worksheet.set_column(13, 13, 7)  # End Time
+
     print(f'\n\nFile "{output_file_name}" is successful written and saved.')
 
 
