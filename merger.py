@@ -8,6 +8,8 @@ IMPORTANT !!!
 import os
 import pathlib
 import warnings
+from collections import defaultdict
+from copy import deepcopy
 from datetime import time, date, datetime
 
 # import Levenshtein
@@ -143,17 +145,29 @@ def process_files(filenames, similarity_score):
                 name[0].strip()  # from row
                 for name in first_df_grouped_to_list[main_frame_index][1].values.tolist()
             ]
+            main_names_copy = frame_names_from_main_df.copy()
+
+            # Adding indexes to fix EXACT duplicates overlapping, Gemini told that that's the most efficient way
+            name_to_indices_map = defaultdict(list)
+            for i, name in enumerate(frame_names_from_main_df):
+                name_to_indices_map[name].append(i)
+
             for small_secondary_frame in data_from_second_df_frame.values:
                 try:
                     frame_name_from_secondary_frame = small_secondary_frame.tolist()[0].strip()
                 except AttributeError:
                     print(small_secondary_frame)
                     frame_name_from_secondary_frame = small_secondary_frame.tolist()[0]
-                best_match = process.extractOne(
-                    frame_name_from_secondary_frame, frame_names_from_main_df, scorer=fuzz.token_set_ratio)
+
+                # Extract almost exact copy or best match,
+                # e.g. "P. Yung" from ['N. Yung', 'P. Yung-Mayhem', 'P. Yung'] would match 'P. Yung-Mayhem' on set
+                best_match = (process.extractOne(
+                    frame_name_from_secondary_frame, main_names_copy, scorer=fuzz.ratio, score_cutoff=98) or
+                              process.extractOne(
+                    frame_name_from_secondary_frame, main_names_copy, scorer=fuzz.token_set_ratio, score_cutoff=similarity_score))
                 value_to_append = pd.Series(small_secondary_frame, index=first_df.columns)
                 # if secondary_frame_in_main_df['similarity'] >= similarity_index:
-                if best_match[1] > similarity_score:
+                if best_match:
                     matched_rows_count += 1
                     # do something if items are similar
                     # print(f"similarity: {secondary_frame_in_main_df}")
@@ -161,7 +175,11 @@ def process_files(filenames, similarity_score):
                     if DEBUG or not permission_for_rewriting:
                         print(f'>This title matched\n'
                               f'\t{from_second_df_frame[0]}')
-                    index_of_el_in_main_df = frame_names_from_main_df.index(best_match[0])
+                    # Old way of getting index
+                    # index_of_el_in_main_df = frame_names_from_main_df.index(best_match[0])
+
+                    # New way
+                    index_of_el_in_main_df = name_to_indices_map[best_match[0]].pop(0)
                     small_main_frame = first_df_grouped_to_list[main_frame_index][1].values[index_of_el_in_main_df]
                     rewritten_data = rewrite_data_in_small_main_fr( list(first_df.columns),
                         small_main_frame, small_secondary_frame, permission_for_rewriting, column_numbers)
@@ -172,7 +190,10 @@ def process_files(filenames, similarity_score):
                     #  save rewritten frame
                     first_df_grouped_to_list[main_frame_index][1] = pd.DataFrame(
                         np_array_from_df, columns=first_df.columns)
-                elif best_match[1] <= similarity_score:
+
+                    # Delete to bypass duplicates
+                    main_names_copy.remove(best_match[0])
+                else:
                     new_rows_count += 1
                     # add row to matched frame
                     if DEBUG or not permission_for_rewriting:
@@ -183,13 +204,13 @@ def process_files(filenames, similarity_score):
                               f"{'>>> From second file:':<30} {best_match[0]:<15}")
 
                         print('- '*30)
-                    a = ''
+                    # a = ''
                     first_df_grouped_to_list[main_frame_index][1] = first_df_grouped_to_list[main_frame_index][1]._append(value_to_append, ignore_index=True)
-                else:
-                    # !!! for exceptions
-                    print('Something went wrong in matching frames name!')
-                    a = ''
-                a = ''
+                # else:
+                #     # !!! for exceptions
+                #     print('Something went wrong in matching frames name!')
+                #     a = ''
+                # a = ''
         elif not match_frame_name and frame_name:
             unmatched_titles_count += 1
             if DEBUG or not permission_for_rewriting:
@@ -290,9 +311,12 @@ def write_result(result: DataFrame, input_file_names):
     output_file_name = f'{"_&_".join([f.rsplit("/")[-1].rsplit(".", 1)[0] for f in input_file_names])}.xlsx'
     # Converting to objects, so I can drop Nat, None, NaN values
     result = result.astype(object).fillna('')
-    result['Date'] = pd.to_datetime(result['Date'], errors='coerce')
-    result['Start Time'] = result['Start Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
-    result['End Time'] = result['End Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+    try:
+        result['Date'] = pd.to_datetime(result['Date'], errors='coerce')
+        result['Start Time'] = result['Start Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+        result['End Time'] = result['End Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+    except KeyError as e:
+        print('Couldn\'t find field: ', e)
 
     with pd.ExcelWriter(output_file_name,
                         engine='xlsxwriter',
