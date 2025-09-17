@@ -199,9 +199,12 @@ def process_files(filenames, similarity_score):
                     if DEBUG or not permission_for_rewriting:
                         print(f'>Added new row to the file\n'
                               f'\t{from_second_df_frame[0]}')
-                        print(f"{'>>> Max. found similarity:':<30} {best_match[1]:<2}%\n"
-                              f"{'>>> From first file:':<30} {frame_name_from_secondary_frame:<15}\n"
-                              f"{'>>> From second file:':<30} {best_match[0]:<15}")
+                        if best_match:
+                            print(f"{'>>> Max. found similarity:':<30} {best_match[1]:<2}%\n"
+                                  f"{'>>> From first file:':<30} {frame_name_from_secondary_frame:<15}\n"
+                                  f"{'>>> From second file:':<30} {best_match[0]:<15}")
+                            print(f"{'>>> No similarities found:':<30} \n"
+                                  f"{'>>> From first file:':<30} {frame_name_from_secondary_frame:<15}\n")
 
                         print('- '*30)
                     # a = ''
