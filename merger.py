@@ -149,8 +149,8 @@ def process_files(filenames, similarity_score):
 
             # Adding indexes to fix EXACT duplicates overlapping, Gemini told that that's the most efficient way
             name_to_indices_map = defaultdict(list)
-            for i, name in enumerate(frame_names_from_main_df):
-                name_to_indices_map[name].append(i)
+            for _i, name in enumerate(frame_names_from_main_df):
+                name_to_indices_map[name].append(_i)
 
             for small_secondary_frame in data_from_second_df_frame.values:
                 try:
@@ -316,8 +316,8 @@ def write_result(result: DataFrame, input_file_names):
     result = result.astype(object).fillna('')
     try:
         result['Date'] = pd.to_datetime(result['Date'], errors='coerce')
-        result['Start Time'] = result['Start Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
-        result['End Time'] = result['End Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else '')
+        result['Start Time'] = result['Start Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else x)
+        result['End Time'] = result['End Time'].apply(lambda x: x.strftime("%H:%M") if isinstance(x, (datetime, time)) else x)
     except KeyError as e:
         print('Couldn\'t find field: ', e)
 
